@@ -33,6 +33,13 @@ jobs:
       - name: terraform fmt
         run: terraform fmt -check -recursive -diff terraform/
 
+      - name: Vérifier la présence du backend S3 et des providers
+        run: |
+          for env in staging prod; do
+            grep -q 'backend "s3"' terraform/environments/$env/backend.tf
+            grep -q 'default_tags' terraform/environments/$env/providers.tf
+          done
+
       - name: terraform validate (staging + prod)
         run: |
           for env in staging prod; do
