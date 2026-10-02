@@ -1,0 +1,11 @@
+# Qui est automatiquement demandé en revue selon les fichiers modifiés.
+# Remplacer @GH_EMMANUEL et @GH_THIERNO par les pseudos GitHub réels.
+# La dernière règle qui correspond l'emporte.
+
+*                              @nsid2003
+/terraform/modules/network/    @nsid2003 @GH_EMMANUEL
+/terraform/modules/compute/    @nsid2003 @GH_THIERNO
+/terraform/modules/data/       @nsid2003 @GH_EMMANUEL
+/terraform/environments/       @nsid2003 @GH_EMMANUEL @GH_THIERNO
+/ansible/                      @nsid2003 @GH_THIERNO
+/.github/                      @nsid2003
