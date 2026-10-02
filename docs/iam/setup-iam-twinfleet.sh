@@ -1,26 +1,16 @@
 #!/usr/bin/env bash
-# =============================================================================
-# setup-iam-twinfleet.sh
-# Crée le groupe IAM "twinfleet-devs", ses 3 policies personnalisées,
-# et les utilisateurs emmanuel + thierno.
-# À EXÉCUTER DANS AWS CLOUDSHELL (console AWS > icône >_ en haut), région eu-west-3.
-# =============================================================================
-set -euo pipefail            # -e : stop à la 1re erreur | -u : variable non définie = erreur | -o pipefail : erreur dans un pipe = erreur
-export AWS_PAGER=""          # désactive le pager (sinon la CLI attend "q" après chaque sortie)
+set -euo pipefail
+export AWS_PAGER=""
 
 GROUP="twinfleet-devs"
 USERS=("emmanuel" "thierno")
 REGION="eu-west-3"
-ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)   # ID du compte (12 chiffres)
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 WORKDIR="$HOME/twinfleet-iam"
 mkdir -p "$WORKDIR" && cd "$WORKDIR"
 
 echo ">> Compte : $ACCOUNT_ID"
 
-# -----------------------------------------------------------------------------
-# 1) Écriture des 3 documents de policy
-#    <<'EOF' (guillemets) = bash n'interprète RIEN dedans (indispensable pour ${aws:username})
-# -----------------------------------------------------------------------------
 cat > iam-roles.json <<'EOF'
 {
   "Version": "2012-10-17",
@@ -76,7 +66,7 @@ cat > iam-roles.json <<'EOF'
   ]
 }
 EOF
-sed -i "s/ACCOUNT_ID/${ACCOUNT_ID}/g" iam-roles.json      # remplace le marqueur par le vrai ID
+sed -i "s/ACCOUNT_ID/${ACCOUNT_ID}/g" iam-roles.json
 
 cat > self-service.json <<'EOF'
 {
@@ -157,10 +147,7 @@ cat > guardrails.json <<'EOF'
 }
 EOF
 
-# -----------------------------------------------------------------------------
-# 2) Création des policies (customer managed)
-# -----------------------------------------------------------------------------
-create_policy() {   # $1 = nom, $2 = fichier JSON ; affiche l'ARN créé
+create_policy() {
   aws iam create-policy \
     --policy-name "$1" \
     --policy-document "file://$2" \
@@ -173,24 +160,18 @@ ARN_SELF=$(create_policy  TwinFleet-SelfService self-service.json)
 ARN_GUARD=$(create_policy TwinFleet-Guardrails  guardrails.json)
 echo ">> Policies créées"
 
-# -----------------------------------------------------------------------------
-# 3) Groupe + attachement des 4 policies
-# -----------------------------------------------------------------------------
 aws iam create-group --group-name "$GROUP" > /dev/null
 for arn in arn:aws:iam::aws:policy/PowerUserAccess "$ARN_ROLES" "$ARN_SELF" "$ARN_GUARD"; do
   aws iam attach-group-policy --group-name "$GROUP" --policy-arn "$arn"
 done
 echo ">> Groupe $GROUP prêt"
 
-# -----------------------------------------------------------------------------
-# 4) Utilisateurs : création, mot de passe temporaire, ajout au groupe
-# -----------------------------------------------------------------------------
 echo
 echo "================= IDENTIFIANTS (à transmettre par 2 canaux séparés) ================="
 echo "URL de connexion : https://${ACCOUNT_ID}.signin.aws.amazon.com/console"
 for u in "${USERS[@]}"; do
   aws iam create-user --user-name "$u" --tags Key=Project,Value=twinfleet > /dev/null
-  PW="$(openssl rand -base64 18 | tr -d '/+=')Aa1!"          # aléatoire + maj/min/chiffre/symbole pour respecter la politique AWS
+  PW="$(openssl rand -base64 18 | tr -d '/+=')Aa1!"
   aws iam create-login-profile --user-name "$u" --password "$PW" --password-reset-required > /dev/null
   aws iam add-user-to-group --user-name "$u" --group-name "$GROUP"
   echo "  $u  /  mot de passe temporaire : $PW"

@@ -1,8 +1,6 @@
 ## Quoi ?
-<!-- Ce que change cette PR, en 2-3 lignes -->
 
 ## Pourquoi ?
-<!-- Le besoin / le problème résolu -->
 
 ## Périmètre
 - [ ] terraform/modules/network
@@ -13,7 +11,6 @@
 - [ ] docs / CI
 
 ## Comment c'est testé ?
-<!-- terraform fmt / validate / plan, ansible-lint, --check, captures… -->
 
 ## Checklist
 - [ ] Commits au format `type(scope): description`

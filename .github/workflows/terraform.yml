@@ -1,0 +1,173 @@
+name: terraform
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: terraform-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-west-3
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: terraform fmt
+        run: terraform fmt -check -recursive -diff terraform/
+
+      - name: terraform validate (staging + prod)
+        run: |
+          for env in staging prod; do
+            terraform -chdir=terraform/environments/$env init -backend=false
+            terraform -chdir=terraform/environments/$env validate
+          done
+
+      - name: ansible-lint
+        run: |
+          pip install --quiet ansible-core ansible-lint
+          ansible-lint ansible/
+
+  plan-pr:
+    if: github.event_name == 'pull_request'
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [staging, prod]
+    defaults:
+      run:
+        working-directory: terraform/environments/${{ matrix.env }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_PLAN_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - run: terraform init
+      - run: terraform plan -var-file=${{ matrix.env }}.tfvars -no-color -out=tfplan
+      - run: terraform show -no-color tfplan > plan.txt
+      - name: Commenter la PR avec le plan
+        uses: actions/github-script@v7
+        env:
+          ENV_NAME: ${{ matrix.env }}
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('terraform/environments/' + process.env.ENV_NAME + '/plan.txt', 'utf8');
+            const body = `### terraform plan — \`${process.env.ENV_NAME}\`\n<details><summary>Voir le plan</summary>\n\n\`\`\`hcl\n${plan.slice(0, 60000)}\n\`\`\`\n</details>`;
+            await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
+
+  plan-staging:
+    if: github.event_name == 'push'
+    needs: lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform/environments/staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_PLAN_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - run: terraform init
+      - run: terraform plan -var-file=staging.tfvars -no-color -out=tfplan
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-staging
+          path: terraform/environments/staging/tfplan
+          retention-days: 1
+
+  apply-staging:
+    needs: plan-staging
+    runs-on: ubuntu-latest
+    environment: staging
+    defaults:
+      run:
+        working-directory: terraform/environments/staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_APPLY_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: tfplan-staging
+          path: terraform/environments/staging
+      - run: terraform init
+      - run: terraform apply -no-color tfplan
+
+  plan-prod:
+    needs: apply-staging
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform/environments/prod
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_PLAN_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - run: terraform init
+      - run: terraform plan -var-file=prod.tfvars -no-color -out=tfplan
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-prod
+          path: terraform/environments/prod/tfplan
+          retention-days: 1
+
+  apply-prod:
+    needs: plan-prod
+    runs-on: ubuntu-latest
+    environment: production
+    defaults:
+      run:
+        working-directory: terraform/environments/prod
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_APPLY_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: tfplan-prod
+          path: terraform/environments/prod
+      - run: terraform init
+      - run: terraform apply -no-color tfplan

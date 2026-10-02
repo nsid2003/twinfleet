@@ -8,8 +8,8 @@ et configurés par les **mêmes rôles Ansible**. Seules les variables changent.
 | Membre | Rôle principal |
 |---|---|
 | Ismael (nsid2003) | Mainteneur du dépôt, merge des PR, à compléter |
-| Emmanuel | à compléter |
-| Thierno | à compléter |
+| Emmanuel (abitoremma) | à compléter |
+| Thierno (ThiernoP2s) | à compléter |
 
 ## Arborescence
 ```
