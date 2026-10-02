@@ -1,0 +1,48 @@
+name: destroy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environnement à détruire"
+        type: choice
+        options:
+          - staging
+          - prod
+      confirm:
+        description: "Retaper le nom de l'environnement pour confirmer"
+        type: string
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: terraform-push-refs/heads/main
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-west-3
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+
+jobs:
+  destroy:
+    if: inputs.confirm == inputs.environment
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment == 'prod' && 'production' || 'staging' }}
+    defaults:
+      run:
+        working-directory: terraform/environments/${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_APPLY_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - run: terraform init
+      - run: terraform destroy -auto-approve -no-color -var-file=${{ inputs.environment }}.tfvars
