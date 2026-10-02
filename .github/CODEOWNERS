@@ -1,2 +1,10 @@
-*            @nsid2003 @abitoremma @ThiernoP2s
-/.github/    @nsid2003
+*                              @nsid2003
+/terraform/modules/network/    @abitoremma
+/terraform/modules/compute/    @ThiernoP2s
+/terraform/modules/data/       @nsid2003
+/terraform/environments/       @nsid2003 @abitoremma @ThiernoP2s
+/ansible/inventory/            @abitoremma
+/ansible/roles/monitoring/     @abitoremma
+/ansible/roles/webserver/      @ThiernoP2s
+/ansible/                      @nsid2003
+/.github/                      @nsid2003
