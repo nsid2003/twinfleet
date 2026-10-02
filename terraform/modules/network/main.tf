@@ -56,6 +56,7 @@ resource "aws_subnet" "data" {
   }
 }
 
+#ajout d'elastic ip 
 resource "aws_eip" "nat" {
   domain = "vpc"
 
