@@ -22,3 +22,13 @@ output "assets_bucket" {
   description = "Nom du bucket S3 applicatif"
   value       = module.data.bucket_name
 }
+
+output "alb_url" {
+  description = "URL publique de l'application"
+  value       = module.compute.alb_url
+}
+
+output "asg_name" {
+  description = "Nom de l'Auto Scaling Group"
+  value       = module.compute.asg_name
+}

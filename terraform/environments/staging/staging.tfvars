@@ -11,3 +11,8 @@ data_subnet_cidrs   = ["10.10.21.0/24", "10.10.22.0/24"]
 db_instance_class          = "db.t3.micro"
 db_allocated_storage       = 20
 db_backup_retention_period = 1
+
+instance_type        = "t3.micro"
+asg_min_size         = 1
+asg_max_size         = 2
+asg_desired_capacity = 1

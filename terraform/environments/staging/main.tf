@@ -17,6 +17,25 @@ module "network" {
 
 module "compute" {
   source = "../../modules/compute"
+
+  name_prefix          = local.name_prefix
+  vpc_id               = module.network.vpc_id
+  public_subnet_ids    = module.network.public_subnet_ids
+  app_subnet_ids       = module.network.app_subnet_ids
+  alb_sg_id            = module.network.alb_sg_id
+  app_sg_id            = module.network.app_sg_id
+  app_port             = var.app_port
+  instance_type        = var.instance_type
+  asg_min_size         = var.asg_min_size
+  asg_max_size         = var.asg_max_size
+  asg_desired_capacity = var.asg_desired_capacity
+  health_check_path    = var.health_check_path
+
+  instance_tags = {
+    Project          = var.project
+    Environment      = var.environment
+    AnsibleSsmBucket = module.data.bucket_name
+  }
 }
 
 module "data" {
