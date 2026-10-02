@@ -1,10 +1,3 @@
-# =============================================================================
-# CI/CD TwinFleet
-#  - Pull Request : lint + plan staging & prod, plan posté en commentaire. JAMAIS d'apply.
-#  - Merge sur main : lint -> plan staging -> [APPROBATION] -> apply staging
-#                                -> plan prod -> [APPROBATION] -> apply prod
-#  L'apply est toujours déclenché par un humain (Environments GitHub protégés).
-# =============================================================================
 name: terraform
 
 on:
@@ -14,23 +7,20 @@ on:
     branches: [main]
 
 permissions:
-  id-token: write        # obtenir le jeton OIDC échangé contre des identifiants AWS temporaires
-  contents: read         # lire le code
-  pull-requests: write   # commenter la PR avec le plan
+  id-token: write
+  contents: read
+  pull-requests: write
 
-concurrency:             # jamais deux pipelines main en parallèle (évite deux apply concurrents)
+concurrency:
   group: terraform-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: false
 
 env:
   AWS_REGION: eu-west-3
-  TF_IN_AUTOMATION: "true"   # messages Terraform adaptés à la CI
-  TF_INPUT: "false"          # Terraform ne pose jamais de question interactive
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
 
 jobs:
-  # ---------------------------------------------------------------------------
-  # STAGE 1 — validations statiques (aucun accès AWS)
-  # ---------------------------------------------------------------------------
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -38,15 +28,15 @@ jobs:
 
       - uses: hashicorp/setup-terraform@v3
         with:
-          terraform_wrapper: false   # sortie brute de terraform (plus simple à exploiter)
+          terraform_wrapper: false
 
       - name: terraform fmt
-        run: terraform fmt -check -recursive -diff terraform/   # -check : échoue si mal formaté | -diff : montre l'écart
+        run: terraform fmt -check -recursive -diff terraform/
 
       - name: terraform validate (staging + prod)
         run: |
           for env in staging prod; do
-            terraform -chdir=terraform/environments/$env init -backend=false   # pas de state nécessaire pour valider
+            terraform -chdir=terraform/environments/$env init -backend=false
             terraform -chdir=terraform/environments/$env validate
           done
 
@@ -55,9 +45,6 @@ jobs:
           pip install --quiet ansible-core ansible-lint
           ansible-lint ansible/
 
-  # ---------------------------------------------------------------------------
-  # PR uniquement — plan des deux environnements, publié en commentaire
-  # ---------------------------------------------------------------------------
   plan-pr:
     if: github.event_name == 'pull_request'
     needs: lint
@@ -73,7 +60,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.AWS_ROLE_PLAN_ARN }}   # rôle LECTURE SEULE
+          role-to-assume: ${{ vars.AWS_ROLE_PLAN_ARN }}
           aws-region: ${{ env.AWS_REGION }}
       - uses: hashicorp/setup-terraform@v3
         with:
@@ -92,9 +79,6 @@ jobs:
             const body = `### terraform plan — \`${process.env.ENV_NAME}\`\n<details><summary>Voir le plan</summary>\n\n\`\`\`hcl\n${plan.slice(0, 60000)}\n\`\`\`\n</details>`;
             await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
 
-  # ---------------------------------------------------------------------------
-  # main — STAGING
-  # ---------------------------------------------------------------------------
   plan-staging:
     if: github.event_name == 'push'
     needs: lint
@@ -113,7 +97,7 @@ jobs:
           terraform_wrapper: false
       - run: terraform init
       - run: terraform plan -var-file=staging.tfvars -no-color -out=tfplan
-      - uses: actions/upload-artifact@v4        # on conserve LE plan relu pour l'apply
+      - uses: actions/upload-artifact@v4
         with:
           name: tfplan-staging
           path: terraform/environments/staging/tfplan
@@ -122,7 +106,7 @@ jobs:
   apply-staging:
     needs: plan-staging
     runs-on: ubuntu-latest
-    environment: staging                        # <- PAUSE : attend l'approbation d'un relecteur
+    environment: staging
     defaults:
       run:
         working-directory: terraform/environments/staging
@@ -130,7 +114,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.AWS_ROLE_APPLY_ARN }}   # rôle ÉCRITURE (seulement depuis l'environnement)
+          role-to-assume: ${{ vars.AWS_ROLE_APPLY_ARN }}
           aws-region: ${{ env.AWS_REGION }}
       - uses: hashicorp/setup-terraform@v3
         with:
@@ -140,11 +124,8 @@ jobs:
           name: tfplan-staging
           path: terraform/environments/staging
       - run: terraform init
-      - run: terraform apply -no-color tfplan  # applique EXACTEMENT le plan relu ; refusé s'il est périmé
+      - run: terraform apply -no-color tfplan
 
-  # ---------------------------------------------------------------------------
-  # main — PROD (seulement après un apply staging réussi)
-  # ---------------------------------------------------------------------------
   plan-prod:
     needs: apply-staging
     runs-on: ubuntu-latest
@@ -171,7 +152,7 @@ jobs:
   apply-prod:
     needs: plan-prod
     runs-on: ubuntu-latest
-    environment: production                     # <- PAUSE : seconde approbation, dédiée à la prod
+    environment: production
     defaults:
       run:
         working-directory: terraform/environments/prod

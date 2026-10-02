@@ -1,4 +1,3 @@
-
 .terraform/
 *.tfstate
 *.tfstate.*
@@ -11,13 +10,10 @@ override.tf.json
 *_override.tf
 *_override.tf.json
 
-
-
 terraform.tfvars
 *.auto.tfvars
 *.secret.tfvars
 !*.tfvars.example
-
 
 *.pem
 *.key
@@ -25,10 +21,8 @@ terraform.tfvars
 .env.*
 *credentials*
 
-
 *.retry
 .vault_pass*
-
 
 .DS_Store
 Thumbs.db

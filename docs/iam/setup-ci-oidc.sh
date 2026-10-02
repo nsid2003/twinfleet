@@ -1,46 +1,31 @@
 #!/usr/bin/env bash
-# =============================================================================
-# setup-ci-oidc.sh — fondations AWS pour la CI GitHub Actions
-#   1) bucket S3 du state Terraform (versionné, chiffré, privé, TLS obligatoire)
-#   2) fournisseur d'identité OIDC GitHub (connexion sans clé AWS)
-#   3) rôle gha-twinfleet-plan  : lecture seule, pour les PR et les plans
-#   4) rôle gha-twinfleet-apply : écriture, UNIQUEMENT depuis les environnements
-#                                 GitHub "staging" et "production" (avec approbation)
-# À exécuter dans AWS CloudShell (eu-west-3), APRÈS setup-iam-twinfleet.sh.
-# =============================================================================
 set -euo pipefail
 export AWS_PAGER=""
 
 REGION="eu-west-3"
 OWNER="nsid2003"
 REPO_NAME="twinfleet"
-# Depuis le 15/07/2026, les dépôts GitHub récents émettent un "sub" OIDC avec leurs ID immuables :
-#   repo:<owner>@<owner_id>/<repo>@<repo_id>:...   (et non plus repo:<owner>/<repo>:...)
-# On récupère ces ID via l'API publique GitHub.
 REPO_JSON=$(curl -fsS "https://api.github.com/repos/${OWNER}/${REPO_NAME}")
 OWNER_ID=$(echo "$REPO_JSON" | jq -r .owner.id)
 REPO_ID=$(echo "$REPO_JSON" | jq -r .id)
-REPO="${OWNER}@${OWNER_ID}/${REPO_NAME}@${REPO_ID}"   # utilisé dans les conditions "sub" ci-dessous
+REPO="${OWNER}@${OWNER_ID}/${REPO_NAME}@${REPO_ID}"
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-BUCKET="twinfleet-tfstate-$(openssl rand -hex 4)"  # suffixe aléatoire : nom S3 unique au monde, sans exposer l'Account ID
+BUCKET="twinfleet-tfstate-$(openssl rand -hex 4)"
 WORKDIR="$HOME/twinfleet-ci" && mkdir -p "$WORKDIR" && cd "$WORKDIR"
 
-# -----------------------------------------------------------------------------
-# 1) Bucket du state
-# -----------------------------------------------------------------------------
 aws s3api create-bucket --bucket "$BUCKET" --region "$REGION" \
-  --create-bucket-configuration LocationConstraint="$REGION" > /dev/null   # hors us-east-1, la région doit être redonnée ici
+  --create-bucket-configuration LocationConstraint="$REGION" > /dev/null
 
 aws s3api put-bucket-versioning --bucket "$BUCKET" \
-  --versioning-configuration Status=Enabled                               # chaque version du state est conservée => retour arrière possible
+  --versioning-configuration Status=Enabled
 
 aws s3api put-bucket-encryption --bucket "$BUCKET" \
   --server-side-encryption-configuration \
-  '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"},"BucketKeyEnabled":true}]}'   # chiffrement au repos SSE-S3
+  '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"},"BucketKeyEnabled":true}]}'
 
 aws s3api put-public-access-block --bucket "$BUCKET" \
   --public-access-block-configuration \
-  BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true   # aucun accès public possible
+  BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
 
 cat > bucket-policy.json <<EOF
 {
@@ -55,13 +40,10 @@ cat > bucket-policy.json <<EOF
   }]
 }
 EOF
-aws s3api put-bucket-policy --bucket "$BUCKET" --policy file://bucket-policy.json   # refuse tout accès non chiffré (HTTP)
+aws s3api put-bucket-policy --bucket "$BUCKET" --policy file://bucket-policy.json
 aws s3api put-bucket-tagging --bucket "$BUCKET" --tagging 'TagSet=[{Key=Project,Value=twinfleet}]'
 echo ">> Bucket state : $BUCKET"
 
-# -----------------------------------------------------------------------------
-# 2) Fournisseur OIDC GitHub (un seul par compte)
-# -----------------------------------------------------------------------------
 OIDC_ARN="arn:aws:iam::${ACCOUNT_ID}:oidc-provider/token.actions.githubusercontent.com"
 if ! aws iam get-open-id-connect-provider --open-id-connect-provider-arn "$OIDC_ARN" > /dev/null 2>&1; then
   aws iam create-open-id-connect-provider \
@@ -71,9 +53,6 @@ if ! aws iam get-open-id-connect-provider --open-id-connect-provider-arn "$OIDC_
 fi
 echo ">> OIDC : $OIDC_ARN"
 
-# -----------------------------------------------------------------------------
-# 3) Rôle PLAN — assumable depuis une PR ou depuis main (jobs sans environnement)
-# -----------------------------------------------------------------------------
 cat > trust-plan.json <<EOF
 {
   "Version": "2012-10-17",
@@ -98,7 +77,7 @@ aws iam create-role --role-name gha-twinfleet-plan \
   --description "GitHub Actions - terraform plan (lecture seule)" \
   --tags Key=Project,Value=twinfleet > /dev/null
 aws iam attach-role-policy --role-name gha-twinfleet-plan \
-  --policy-arn arn:aws:iam::aws:policy/ReadOnlyAccess                       # lecture de toutes les ressources (refresh du plan)
+  --policy-arn arn:aws:iam::aws:policy/ReadOnlyAccess
 
 cat > plan-lock.json <<EOF
 {
@@ -112,11 +91,8 @@ cat > plan-lock.json <<EOF
 }
 EOF
 aws iam put-role-policy --role-name gha-twinfleet-plan \
-  --policy-name tfstate-lock --policy-document file://plan-lock.json        # le plan pose/retire le verrou, mais ne peut PAS écrire le state
+  --policy-name tfstate-lock --policy-document file://plan-lock.json
 
-# -----------------------------------------------------------------------------
-# 4) Rôle APPLY — assumable UNIQUEMENT depuis les environnements GitHub protégés
-# -----------------------------------------------------------------------------
 cat > trust-apply.json <<EOF
 {
   "Version": "2012-10-17",
@@ -144,7 +120,7 @@ for arn in \
   arn:aws:iam::aws:policy/PowerUserAccess \
   "arn:aws:iam::${ACCOUNT_ID}:policy/TwinFleet-IAM-Roles" \
   "arn:aws:iam::${ACCOUNT_ID}:policy/TwinFleet-Guardrails"; do
-  aws iam attach-role-policy --role-name gha-twinfleet-apply --policy-arn "$arn"   # mêmes droits ET mêmes garde-fous que les humains
+  aws iam attach-role-policy --role-name gha-twinfleet-apply --policy-arn "$arn"
 done
 
 echo

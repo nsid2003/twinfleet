@@ -1,6 +1,2 @@
-# Relecteurs demandés automatiquement sur chaque PR.
-# Provisoire : tout le monde sur tout, en attendant la répartition des modules.
-# La dernière règle qui correspond l'emporte.
-
 *            @nsid2003 @abitoremma @ThiernoP2s
 /.github/    @nsid2003
