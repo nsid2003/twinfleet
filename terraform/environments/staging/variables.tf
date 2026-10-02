@@ -55,3 +55,42 @@ variable "db_port" {
   type        = number
   default     = 5432
 }
+
+variable "db_instance_class" {
+  description = "Classe de l'instance RDS"
+  type        = string
+}
+
+variable "db_engine_version" {
+  description = "Version majeure de PostgreSQL"
+  type        = string
+  default     = "16"
+}
+
+variable "db_allocated_storage" {
+  description = "Stockage alloué à RDS (Go)"
+  type        = number
+}
+
+variable "db_name" {
+  description = "Nom de la base applicative"
+  type        = string
+  default     = "trackfleet"
+}
+
+variable "db_username" {
+  description = "Utilisateur administrateur RDS"
+  type        = string
+  default     = "trackfleet_admin"
+}
+
+variable "db_backup_retention_period" {
+  description = "Nombre de jours de rétention des sauvegardes RDS"
+  type        = number
+}
+
+variable "bucket_force_destroy" {
+  description = "Autorise la suppression du bucket même s'il contient des objets"
+  type        = bool
+  default     = true
+}
