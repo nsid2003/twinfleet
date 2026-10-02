@@ -142,7 +142,7 @@ resource "aws_security_group" "alb" {
 
 resource "aws_security_group" "app" {
   name        = "${var.name_prefix}-app-sg"
-  description = "Instances applicatives - trafic depuis l'ALB uniquement"
+  description = "Instances applicatives - trafic depuis ALB uniquement"
   vpc_id      = aws_vpc.this.id
 
   tags = {
@@ -180,7 +180,7 @@ resource "aws_vpc_security_group_egress_rule" "alb_to_app" {
 
 resource "aws_vpc_security_group_ingress_rule" "app_from_alb" {
   security_group_id            = aws_security_group.app.id
-  description                  = "Depuis l'ALB"
+  description                  = "Depuis ALB"
   referenced_security_group_id = aws_security_group.alb.id
   ip_protocol                  = "tcp"
   from_port                    = var.app_port
