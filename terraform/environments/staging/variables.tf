@@ -94,3 +94,29 @@ variable "bucket_force_destroy" {
   type        = bool
   default     = true
 }
+
+variable "instance_type" {
+  description = "Type d'instance EC2 des serveurs applicatifs"
+  type        = string
+}
+
+variable "asg_min_size" {
+  description = "Nombre minimal d'instances dans l'ASG"
+  type        = number
+}
+
+variable "asg_max_size" {
+  description = "Nombre maximal d'instances dans l'ASG"
+  type        = number
+}
+
+variable "asg_desired_capacity" {
+  description = "Nombre d'instances souhaité dans l'ASG"
+  type        = number
+}
+
+variable "health_check_path" {
+  description = "Chemin HTTP vérifié par le Target Group"
+  type        = string
+  default     = "/"
+}
