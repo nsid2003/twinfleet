@@ -12,7 +12,15 @@ set -euo pipefail
 export AWS_PAGER=""
 
 REGION="eu-west-3"
-REPO="nsid2003/twinfleet"                       # propriétaire/nom du dépôt GitHub
+OWNER="nsid2003"
+REPO_NAME="twinfleet"
+# Depuis le 15/07/2026, les dépôts GitHub récents émettent un "sub" OIDC avec leurs ID immuables :
+#   repo:<owner>@<owner_id>/<repo>@<repo_id>:...   (et non plus repo:<owner>/<repo>:...)
+# On récupère ces ID via l'API publique GitHub.
+REPO_JSON=$(curl -fsS "https://api.github.com/repos/${OWNER}/${REPO_NAME}")
+OWNER_ID=$(echo "$REPO_JSON" | jq -r .owner.id)
+REPO_ID=$(echo "$REPO_JSON" | jq -r .id)
+REPO="${OWNER}@${OWNER_ID}/${REPO_NAME}@${REPO_ID}"   # utilisé dans les conditions "sub" ci-dessous
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 BUCKET="twinfleet-tfstate-$(openssl rand -hex 4)"  # suffixe aléatoire : nom S3 unique au monde, sans exposer l'Account ID
 WORKDIR="$HOME/twinfleet-ci" && mkdir -p "$WORKDIR" && cd "$WORKDIR"
